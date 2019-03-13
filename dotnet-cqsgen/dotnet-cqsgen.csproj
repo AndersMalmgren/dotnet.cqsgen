@@ -10,6 +10,7 @@
     <PackageId>dotnet.cqsgen</PackageId>
     <Authors>Anders Malmgren</Authors>
     <Company>MDA Digital</Company>
+    <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
   </PropertyGroup>
 
 </Project>
