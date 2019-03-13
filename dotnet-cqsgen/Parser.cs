@@ -25,7 +25,7 @@ namespace dotnet_cqsgen
 
 
             return $@"(function() {{
-{string.Join(Environment.NewLine, BuildNamespace(concreteTypes).Select(ns => $"   {ns}"))}
+{string.Join(Environment.NewLine, BuildNamespace(concreteTypes.Union(enumTypes)).Select(ns => $"   {ns}"))}
 
 {string.Join(Environment.NewLine, BuildEnums(enumTypes))}
 {string.Join(Environment.NewLine, BuildContracts(concreteTypes))}
