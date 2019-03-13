@@ -8,11 +8,23 @@ namespace dotnet_cqsgen
 {
     public class Parser
     {
-        public string Parse(IEnumerable<string> baseclassTypes, string assemblyPath)
-        {
-            var assembly = Assembly.LoadFile(assemblyPath);
-            var baseClasses = baseclassTypes.Select(tn => assembly.GetType(tn)).ToList();
+        private readonly IEnumerable<string> _baseclassTypes;
+        private readonly string _assemblyPath;
+        private readonly bool _ignoreBaseClassProperties;
 
+
+        public Parser(IEnumerable<string> baseclassTypes, string assemblyPath, bool ignoreBaseClassProperties)
+        {
+            _baseclassTypes = baseclassTypes;
+            _assemblyPath = assemblyPath;
+            _ignoreBaseClassProperties = ignoreBaseClassProperties;
+        }
+
+        public string Parse()
+        {
+            var assembly = Assembly.LoadFile(_assemblyPath);
+            var baseClasses = _baseclassTypes.Select(tn => assembly.GetType(tn)).ToList();
+            
             var allTypes = assembly.GetTypes();
             var concreteTypes = allTypes
                 .Where(t => !t.IsAbstract && baseClasses.Any(bc => bc.IsAssignableFrom(t)))
@@ -28,7 +40,7 @@ namespace dotnet_cqsgen
 {string.Join(Environment.NewLine, BuildNamespace(concreteTypes.Union(enumTypes)).Select(ns => $"   {ns}"))}
 
 {string.Join(Environment.NewLine, BuildEnums(enumTypes))}
-{string.Join(Environment.NewLine, BuildContracts(concreteTypes))}
+{string.Join(Environment.NewLine, BuildContracts(concreteTypes, baseClasses))}
 }})();
 ";
         }
@@ -55,11 +67,11 @@ namespace dotnet_cqsgen
             }
         }
 
-        public IEnumerable<string> BuildContracts(IEnumerable<Type> contracts)
+        public IEnumerable<string> BuildContracts(IEnumerable<Type> contracts, IEnumerable<Type> baseTypes)
         {
             foreach (var contract in contracts)
             {
-                var cameled = contract.GetProperties().Select(p => CamelCased(p.Name)).ToList();
+                var cameled = contract.GetProperties().Where(p => !_ignoreBaseClassProperties || baseTypes.All(bc => bc != p.DeclaringType)).Select(p => CamelCased(p.Name)).ToList();
                 var properties = string.Join(", ", cameled);
 
                 yield return $@"   {contract.FullName}=function({properties}) {{
