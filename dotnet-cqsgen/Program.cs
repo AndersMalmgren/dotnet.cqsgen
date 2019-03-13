@@ -10,8 +10,8 @@ namespace dotnet_cqsgen
     {
         static void Main(string[] args)
         {
-            //args = new[] {"foo", "output.js", "IC.Eko.Core.Contracts.Commands.Command;IC.Eko.Core.Contracts.Queries.Query"};
-            var ignoreBaseClassProperties = args.Length > 3 && args[3].ToLower() == "true";
+            //args = new[] {"foo", "output.js", "Contracts.Commands.Command;Contracts.Queries.Query", "ignore-properties-on-base" };
+            var ignoreBaseClassProperties = args.Any(a => a.ToLower() == "ignore-properties-on-base");
 
             Console.WriteLine("Starting parsing cqs contracts!");
             var assemblyPath = $"{Directory.GetCurrentDirectory()}\\{args[0]}";
