@@ -28,6 +28,7 @@ namespace dotnet_cqsgen
             var allTypes = assembly.GetTypes();
             var concreteTypes = allTypes
                 .Where(t => !t.IsAbstract && baseClasses.Any(bc => bc.IsAssignableFrom(t)))
+                .SelectMany(t => new[] { t }.Union(t.GetProperties().Where(p => p.PropertyType.IsClass && t.Assembly == assembly).Select(p => p.PropertyType)))
                 .ToList();
 
             var enumTypes = concreteTypes
