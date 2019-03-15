@@ -66,11 +66,6 @@ namespace dotnet_cqsgen
             var types = t.GetProperties().Select(p => ExtractElementFromArray(p.PropertyType)).Where(pt => !pt.IsValueType && pt.Assembly == assembly).ToList();
             foreach (var type in types)
             {
-                if (type.Name == "InvoiceStatus")
-                {
-
-                }
-
                 yield return type;
                 foreach (var inner in GetProperties(type, assembly).ToList())
                     yield return inner;
