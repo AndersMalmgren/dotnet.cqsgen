@@ -74,8 +74,20 @@ namespace dotnet_cqsgen
                 if (args.Length > 0) return $"{GetPropertyTypeName(args[0], ns)}[]";
             }
 
-            if (type.Assembly == assembly && type.Namespace != ns) return $"{type.Namespace}.{type.Name}";
+            if (type.Assembly == assembly)
+            {
+                if (ns == type.Namespace) return type.Name;
 
+                var stripIndex = 0;
+                for (int i = 0; i < type.Namespace.Length; i++)
+                {
+                    if (i < ns.Length && ns[i] == type.Namespace[i])
+                        stripIndex = i;
+                }
+
+                if (stripIndex > 0)
+                    return $"{type.Namespace.Substring(stripIndex + 1)}.{type.Name}";
+            }
 
             return type.Name;
         }
