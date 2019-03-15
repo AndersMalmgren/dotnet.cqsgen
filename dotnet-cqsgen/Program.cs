@@ -11,12 +11,10 @@ namespace dotnet_cqsgen
     {
         static void Main(string[] args)
         {
-            args = new []{ "foo", "cqs.contracts.ts","IC.Eko.Core.Contracts.Commands.Command;IC.Eko.Core.Contracts.Queries.Query" };
             var ignoreBaseClassProperties = args.Any(a => a.ToLower() == "ignore-properties-on-base");
 
             Console.WriteLine("Starting parsing cqs contracts!");
-            //var assemblyPath = $"{Directory.GetCurrentDirectory()}\\{args[0]}";
-            var assemblyPath = @"C:\git\HeartBeat\src\IC.Eko.WebApi\bin\Debug\netcoreapp2.2\IC.Eko.Core.Contracts.dll";
+            var assemblyPath = $"{Directory.GetCurrentDirectory()}\\{args[0]}";
             var outputPath = args[1];
 
             var assembly = Assembly.LoadFile(assemblyPath);
