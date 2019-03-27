@@ -65,10 +65,13 @@ namespace dotnet_cqsgen
 
                     yield return $"    export class {contract.Name}{extends} {{";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
-                    yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
-                    if (hasBaseContract) yield return $"                super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))})";
-                    foreach (var p in properties) yield return $"                this.{p.CamelCased}={p.CamelCased};";
-                    yield return "        }";
+                    if(hasBaseContract || properties.Any())
+                    { 
+                        yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
+                        if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))});";
+                        foreach (var p in properties) yield return $"            this.{p.CamelCased}={p.CamelCased};";
+                        yield return "        }";
+                    }
                     yield return "    }";
                     yield return $@"    {contract.Name}[""type""]=""{contract.FullName}"";";
                 }
