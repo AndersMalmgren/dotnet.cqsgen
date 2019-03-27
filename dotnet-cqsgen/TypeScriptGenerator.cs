@@ -32,7 +32,10 @@ namespace dotnet_cqsgen
 
         private IEnumerable<string> GenerateInternal()
         {
-            var namespaces = concreteTypes.GroupBy(c => c.Namespace);
+            var namespaces = concreteTypes
+                .Union(baseClasses)
+                .GroupBy(c => c.Namespace)
+                .OrderBy(ns => !ns.Any(c => baseClasses.Any(bc => bc == c)));
 
             foreach (var ns in namespaces)
             {
@@ -50,11 +53,20 @@ namespace dotnet_cqsgen
 
                 foreach (var contract in ns)
                 {
-                    var properties = GetProperties(contract).Select(p => new { CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key) });
+                    var baseContract = baseClasses.FirstOrDefault(bc => bc != contract && bc.IsAssignableFrom(contract));
+                    var hasBaseContract = baseContract != null;
 
-                    yield return $"    export class {contract.Name} {{";
-                    foreach (var p in properties) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
+                    var properties = GetProperties(contract)
+                        .Select(p => new { IsBaseProperty = p.DeclaringType == baseContract, CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key) })
+                        .OrderBy(p => !p.IsBaseProperty)
+                        .ToList();
+
+                    var extends = hasBaseContract ? $" extends {GetPropertyTypeName(baseContract, ns.Key)}" : string.Empty;
+
+                    yield return $"    export class {contract.Name}{extends} {{";
+                    foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
                     yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
+                    if (hasBaseContract) yield return $"                super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))})";
                     foreach (var p in properties) yield return $"                this.{p.CamelCased}={p.CamelCased};";
                     yield return "        }";
                     yield return "    }";
@@ -85,7 +97,7 @@ namespace dotnet_cqsgen
                         stripIndex = i;
                 }
 
-                if (stripIndex > 0)
+                if (stripIndex > 0 && stripIndex + 1 < type.Namespace.Length)
                     return $"{type.Namespace.Substring(stripIndex + 1)}.{type.Name}";
             }
 
