@@ -59,7 +59,7 @@ namespace dotnet_cqsgen
                     var contract = grpList.Count == 1 ? grpList[0] : grpList.FirstOrDefault(c => c.IsGenericType);
                     var hasDefaultGenericArguments = grpList.Count > 1;
 
-                    var contractName = StripGenericsFromName(contract.Name);
+                    var contractName = grp.Key;
 
                     var baseContract = contract.BaseType?.Assembly == assembly && (!hasDefaultGenericArguments || grpList.All(bc => bc != contract.BaseType)) ? contract.BaseType : null;
                     var hasBaseContract = baseContract != null;
@@ -73,6 +73,8 @@ namespace dotnet_cqsgen
 
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
+                    foreach (var p in (contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()) yield return $"        private _dummy{p.Name}:{p.Name};";
+
                     if(hasBaseContract || properties.Any())
                     { 
                         yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
