@@ -20,68 +20,29 @@ namespace dotnet_cqsgen
             var assembly = Assembly.LoadFile(assemblyPath);
             var baseClasses = args[2].Split(";").Select(tn => assembly.GetType(tn)).ToList();
 
-            var allTypes = assembly.GetTypes();
-            var concreteTypes = allTypes
-                .Where(t => !t.IsAbstract && baseClasses.Any(bc => bc.IsAssignableFrom(t)))
-                .ToList();
-
-            var containtedTypes = concreteTypes
-                .SelectMany(t => GetProperties(t, assembly))
-                .Distinct()
-                .ToList();
-
-            concreteTypes = containtedTypes
-                .Union(concreteTypes)
-                .ToList();
-
-            var enumTypes = concreteTypes
-                .SelectMany(c => c.GetProperties().Where(p => p.PropertyType.IsEnum).Select(p => p.PropertyType))
-                .Distinct()
-                .ToList();
-
             var ext = Path.GetExtension(outputPath);
 
-            var parser = GetGenerator(ext, assembly, baseClasses, concreteTypes, enumTypes,ignoreBaseClassProperties);
+            var parser = GetGenerator(ext, assembly, baseClasses, ignoreBaseClassProperties);
             var result = parser.Generate();
             
             Console.WriteLine($"Parsing complete, saving: {outputPath}");
             File.WriteAllText(outputPath, result);
         }
 
-        private static ScriptGenerator GetGenerator(string ext, Assembly assembly, List<Type> baseClasses, IEnumerable<Type> concreteTypes, IEnumerable<Type> enumTypes, bool ignoreBaseClassProperties)
+        private static ScriptGenerator GetGenerator(string ext, Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties)
         {
             switch (ext.ToLower())
             {
                 case ".js":
-                    return new JavaScriptGenerator(assembly, baseClasses, concreteTypes, enumTypes, ignoreBaseClassProperties);
+                    return new JavaScriptGenerator(assembly, baseClasses, ignoreBaseClassProperties);
                 case ".ts":
-                    return new TypeScriptGenerator(assembly, baseClasses, concreteTypes, enumTypes, ignoreBaseClassProperties);
+                    return new TypeScriptGenerator(assembly, baseClasses, ignoreBaseClassProperties);
                 default:
                     throw new ArgumentException($"Extension {ext} not supported");
             }
         }
 
-        private static IEnumerable<Type> GetProperties(Type t, Assembly assembly)
-        {
-            var types = t.GetProperties().Select(p => ExtractElementFromArray(p.PropertyType)).Where(pt => !pt.IsValueType && pt.Assembly == assembly).ToList();
-            foreach (var type in types)
-            {
-                yield return type;
-                foreach (var inner in GetProperties(type, assembly).ToList())
-                    yield return inner;
-            }
-        }
 
-        private static Type ExtractElementFromArray(Type propType)
-        {
-            if (typeof(IEnumerable).IsAssignableFrom(propType))
-            {
-                var args = propType.GetGenericArguments();
-                if (args.Length > 0) return args[0];
-            }
-
-            return propType;
-        }
 
     }
 }

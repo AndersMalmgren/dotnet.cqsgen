@@ -10,8 +10,10 @@ namespace dotnet_cqsgen
     {
         private readonly Dictionary<Type, string> typeMapping;
 
-        public TypeScriptGenerator(Assembly assembly, List<Type> baseClasses, IEnumerable<Type> concreteTypes, IEnumerable<Type> enumTypes, bool ignoreBaseClassProperties) : base(assembly, baseClasses, concreteTypes, enumTypes, ignoreBaseClassProperties)
+        public TypeScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties) : base(assembly, baseClasses, ignoreBaseClassProperties)
         {
+            InitTypes(true, types => types.Where(t => t.BaseType.IsGenericType && t.BaseType.GenericTypeArguments.Length > 0).SelectMany(t => t.BaseType.GenericTypeArguments.Select(ExtractElementFromArray).Where(arg => arg.Assembly == assembly)));
+
             typeMapping = new Dictionary<Type, string>
             {
                 { typeof(string), "string" },
@@ -32,7 +34,7 @@ namespace dotnet_cqsgen
 
         private IEnumerable<string> GenerateInternal()
         {
-            var namespaces = concreteTypes
+            var namespaces = materializedTypes
                 .Union(baseClasses)
                 .GroupBy(c => c.Namespace)
                 .OrderBy(ns => !ns.Any(c => baseClasses.Any(bc => bc == c)));
@@ -51,33 +53,57 @@ namespace dotnet_cqsgen
                     yield return "    }";
                 }
 
-                foreach (var contract in ns)
+                foreach (var grp in ns.GroupBy(contract => StripGenericsFromName(contract.Name)))
                 {
-                    var baseContract = baseClasses.FirstOrDefault(bc => bc != contract && bc.IsAssignableFrom(contract));
-                    var hasBaseContract = baseContract != null;
+                    var grpList = grp.ToList();
+                    var contract = grpList.Count == 1 ? grpList[0] : grpList.FirstOrDefault(c => c.IsGenericType);
+                    var hasDefaultGenericArguments = grpList.Count > 1;
 
+                    var contractName = StripGenericsFromName(contract.Name);
+
+                    var baseContract = contract.BaseType?.Assembly == assembly && (!hasDefaultGenericArguments || grpList.All(bc => bc != contract.BaseType)) ? contract.BaseType : null;
+                    var hasBaseContract = baseContract != null;
+                    
                     var properties = GetProperties(contract)
                         .Select(p => new { IsBaseProperty = p.DeclaringType == baseContract, CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key) })
                         .OrderBy(p => !p.IsBaseProperty)
                         .ToList();
 
-                    var extends = hasBaseContract ? $" extends {GetPropertyTypeName(baseContract, ns.Key)}" : string.Empty;
+                    var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key))}{GetGenerics(baseContract, ns.Key)}" : string.Empty;
 
-                    yield return $"    export class {contract.Name}{extends} {{";
+                    yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
                     if(hasBaseContract || properties.Any())
                     { 
                         yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
                         if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))});";
                         foreach (var p in properties) yield return $"            this.{p.CamelCased}={p.CamelCased};";
+                        yield return $@"            this.constructor[""type""]=""{contract.FullName}"";";
                         yield return "        }";
                     }
                     yield return "    }";
-                    yield return $@"    {contract.Name}[""type""]=""{contract.FullName}"";";
                 }
     
                 yield return "}";
             }
+        }
+
+        private string GetGenerics(Type contract, string ns, bool hasDefaultGenericArguments = false)
+        {
+            if (!contract.IsGenericType) return string.Empty;
+            var info = (TypeInfo)contract;
+            var types = info.GenericTypeParameters.Length > 0 ? info.GenericTypeParameters : info.GenericTypeArguments;
+            var defaultArg = hasDefaultGenericArguments ? " = void" : string.Empty;
+
+            return $"<{string.Join(", ", types.Select(t => GetPropertyTypeName(t, ns)))}{defaultArg}>";
+        }
+
+        private string StripGenericsFromName(string name)
+        {
+            var index = name.IndexOf("`", StringComparison.Ordinal);
+            if (index < 0) return name;
+
+            return name.Substring(0, index);
         }
 
         private string GetPropertyTypeName(Type type, string ns)

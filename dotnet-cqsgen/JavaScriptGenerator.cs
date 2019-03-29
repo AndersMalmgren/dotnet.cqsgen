@@ -8,16 +8,19 @@ namespace dotnet_cqsgen
 {
     public class JavaScriptGenerator : ScriptGenerator
     {
-        public JavaScriptGenerator(Assembly assembly, List<Type> baseClasses, IEnumerable<Type> concreteTypes, IEnumerable<Type> enumTypes, bool ignoreBaseClassProperties) : base(assembly, baseClasses, concreteTypes, enumTypes, ignoreBaseClassProperties) {}
+        public JavaScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties) : base(assembly, baseClasses, ignoreBaseClassProperties)
+        {
+            InitTypes();
+        }
 
         public override string Generate()
         {
 
             return $@"(function() {{
-{string.Join(Environment.NewLine, BuildNamespace(concreteTypes.Union(enumTypes)).Select(ns => $"   {ns}"))}
+{string.Join(Environment.NewLine, BuildNamespace(materializedTypes.Union(enumTypes)).Select(ns => $"   {ns}"))}
 
 {string.Join(Environment.NewLine, BuildEnums(enumTypes))}
-{string.Join(Environment.NewLine, BuildContracts(concreteTypes))}
+{string.Join(Environment.NewLine, BuildContracts(materializedTypes))}
 }})();
 ";
         }
