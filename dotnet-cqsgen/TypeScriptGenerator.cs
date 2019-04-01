@@ -35,7 +35,6 @@ namespace dotnet_cqsgen
         private IEnumerable<string> GenerateInternal()
         {
             var namespaces = materializedTypes
-                .Union(baseClasses)
                 .GroupBy(c => c.Namespace)
                 .OrderBy(ns => !ns.Any(c => baseClasses.Any(bc => bc == c)));
 
@@ -59,7 +58,7 @@ namespace dotnet_cqsgen
                     var contract = grpList.Count == 1 ? grpList[0] : grpList.FirstOrDefault(c => c.IsGenericType);
                     var hasDefaultGenericArguments = grpList.Count > 1;
 
-                    var contractName = StripGenericsFromName(contract.Name);
+                    var contractName = grp.Key;
 
                     var baseContract = contract.BaseType?.Assembly == assembly && (!hasDefaultGenericArguments || grpList.All(bc => bc != contract.BaseType)) ? contract.BaseType : null;
                     var hasBaseContract = baseContract != null;
