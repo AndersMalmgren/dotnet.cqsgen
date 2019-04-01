@@ -64,7 +64,7 @@ namespace dotnet_cqsgen
                     var hasBaseContract = baseContract != null;
                     
                     var properties = GetProperties(contract)
-                        .Select(p => new { IsBaseProperty = p.DeclaringType == baseContract, CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key) })
+                        .Select(p => new { IsBaseProperty = p.DeclaringType != contract && grpList.All(bc => p.DeclaringType != bc), CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key) })
                         .OrderBy(p => !p.IsBaseProperty)
                         .ToList();
 
@@ -78,7 +78,7 @@ namespace dotnet_cqsgen
                     { 
                         yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
                         if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))});";
-                        foreach (var p in properties) yield return $"            this.{p.CamelCased}={p.CamelCased};";
+                        foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"            this.{p.CamelCased}={p.CamelCased};";
                         yield return $@"            this.constructor[""type""]=""{contract.FullName}"";";
                         yield return "        }";
                     }
