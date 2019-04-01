@@ -72,6 +72,8 @@ namespace dotnet_cqsgen
 
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
+                    foreach (var p in (contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()) yield return $"        private _dummy{p.Name}:{p.Name};";
+
                     if(hasBaseContract || properties.Any())
                     { 
                         yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";

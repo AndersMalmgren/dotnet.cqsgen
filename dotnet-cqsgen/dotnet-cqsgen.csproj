@@ -6,7 +6,7 @@
     <RootNamespace>dotnet_cqsgen</RootNamespace>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageType>DotnetCliTool</PackageType>
-    <Version>1.0.18</Version>
+    <Version>1.0.19</Version>
     <PackageId>dotnet.cqsgen</PackageId>
     <Authors>Anders Malmgren</Authors>
     <Company>MDA Digital</Company>
