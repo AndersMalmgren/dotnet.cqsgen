@@ -116,6 +116,12 @@ namespace dotnet_cqsgen
                 if (args.Length > 0) return $"{GetPropertyTypeName(args[0], ns)}[]";
             }
 
+            var nullableType = Nullable.GetUnderlyingType(type);
+            if (nullableType != null)
+            {
+                return GetPropertyTypeName(nullableType, ns);
+            }
+
             if (type.Assembly == assembly)
             {
                 if (ns == type.Namespace) return type.Name;
