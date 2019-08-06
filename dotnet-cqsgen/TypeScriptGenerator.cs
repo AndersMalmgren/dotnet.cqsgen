@@ -22,6 +22,7 @@ namespace dotnet_cqsgen
                 { typeof(decimal), "number" },
                 { typeof(float), "number" },
                 { typeof(long), "number" },
+                { typeof(byte), "number" },
                 { typeof(DateTime), "Date" },
                 { typeof(bool), "boolean" }
             };
@@ -112,8 +113,15 @@ namespace dotnet_cqsgen
             if (typeMapping.ContainsKey(type)) return typeMapping[type];
             if (typeof(IEnumerable).IsAssignableFrom(type))
             {
-                var args = type.GetGenericArguments();
-                if (args.Length > 0) return $"{GetPropertyTypeName(args[0], ns)}[]";
+                var elementType = type.GetElementType();
+                if (elementType == null)
+                {
+                    var args = type.GetGenericArguments();
+                    if (args.Length > 0)
+                        elementType = args[0];
+                }
+
+                if (elementType != null) return $"{GetPropertyTypeName(elementType, ns)}[]";
             }
 
             var nullableType = Nullable.GetUnderlyingType(type);
@@ -131,6 +139,8 @@ namespace dotnet_cqsgen
                 {
                     if (i < ns.Length && ns[i] == type.Namespace[i])
                         stripIndex = i;
+                    else
+                        break;
                 }
 
                 if (stripIndex > 0 && stripIndex + 1 < type.Namespace.Length)
