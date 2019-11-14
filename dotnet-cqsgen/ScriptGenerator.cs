@@ -45,7 +45,7 @@ namespace dotnet_cqsgen
                 .ToList();
 
             enumTypes = materializedTypes
-                .SelectMany(c => c.GetProperties().Where(p => p.PropertyType.IsEnum).Select(p => p.PropertyType))
+                .SelectMany(c => c.GetProperties().Select(p => GetUnderlyingType(p.PropertyType)).Where(pt => pt.IsEnum))
                 .Distinct()
                 .ToList();
 
@@ -60,6 +60,14 @@ namespace dotnet_cqsgen
                 foreach (var inner in FindProperties(type).ToList())
                     yield return inner;
             }
+        }
+
+        private Type GetUnderlyingType(Type type)
+        {
+            var nullableType = Nullable.GetUnderlyingType(type);
+            if (nullableType != null) return nullableType;
+
+            return type;
         }
 
         protected Type ExtractElementFromArray(Type propType)
