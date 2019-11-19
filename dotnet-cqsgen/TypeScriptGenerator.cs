@@ -65,19 +65,19 @@ namespace dotnet_cqsgen
                     var hasBaseContract = baseContract != null;
                     
                     var properties = GetProperties(contract)
-                        .Select(p => new { IsBaseProperty = p.DeclaringType != contract && grpList.All(bc => p.DeclaringType != bc), CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key) })
+                        .Select(p => new { IsBaseProperty = p.DeclaringType != contract && grpList.All(bc => p.DeclaringType != bc), CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key), IsNullable = Nullable.GetUnderlyingType(p.PropertyType) != null, NullablePostfix = Nullable.GetUnderlyingType(p.PropertyType) != null ? "?":"" })
                         .OrderBy(p => !p.IsBaseProperty)
                         .ToList();
 
                     var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key))}{GetGenerics(baseContract, ns.Key)}" : string.Empty;
 
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
-                    foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}: {p.TypeName};";
+                    foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}{p.NullablePostfix}: {p.TypeName};";
                     foreach (var p in (contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()) yield return $"        private _dummy{p.Name}:{p.Name};";
 
                     if(hasBaseContract || properties.Any())
                     { 
-                        yield return $"        constructor({string.Join(", ", properties.Select(p => $"{p.CamelCased}:{p.TypeName}"))}) {{";
+                        yield return $"        constructor({string.Join(", ", properties.OrderBy(p => p.IsNullable).Select(p => $"{p.CamelCased}{p.NullablePostfix}:{p.TypeName}"))}) {{";
                         if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))});";
                         foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"            this.{p.CamelCased}={p.CamelCased};";
                         yield return $@"            this.constructor[""type""]=""{contract.FullName}"";";
