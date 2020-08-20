@@ -132,22 +132,28 @@ namespace dotnet_cqsgen
 
             if (type.Assembly == assembly)
             {
-                if (ns == type.Namespace) return type.Name;
+                if (ns == type.Namespace || type.Namespace == null) return type.Name;
 
-                var stripIndex = 0;
-                for (int i = 0; i < type.Namespace.Length; i++)
-                {
-                    if (i < ns.Length && ns[i] == type.Namespace[i])
-                        stripIndex = i;
-                    else
-                        break;
-                }
+                var closure = ns.Split(".");
+                var dependency = type.Namespace.Split(".");
 
-                if (stripIndex > 0 && stripIndex + 1 < type.Namespace.Length)
-                    return $"{type.Namespace.Substring(stripIndex + 1)}.{type.Name}";
+                var start = GetNamespaceStart(closure, dependency);
+                var stripped = string.Join(".", dependency.Skip(start));
+                return $"{stripped}.{type.Name}";
             }
 
             return type.Name;
         }
+
+        private int GetNamespaceStart(string[] closure, string[] dependency)
+        {
+            for (int i = 0; i < dependency.Length; i++)
+            {
+                if (i >= closure.Length || closure[i] != dependency[i]) return i;
+            }
+
+            return dependency.Length-1;
+        }
+
     }
 }
