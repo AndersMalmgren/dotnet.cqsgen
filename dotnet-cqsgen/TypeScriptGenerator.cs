@@ -138,6 +138,8 @@ namespace dotnet_cqsgen
                 var dependency = type.Namespace.Split(".");
 
                 var start = GetNamespaceStart(closure, dependency);
+                if (start == dependency.Length) return type.Name;
+
                 var stripped = string.Join(".", dependency.Skip(start));
                 return $"{stripped}.{type.Name}";
             }
@@ -152,7 +154,7 @@ namespace dotnet_cqsgen
                 if (i >= closure.Length || closure[i] != dependency[i]) return i;
             }
 
-            return dependency.Length-1;
+            return dependency.Length;
         }
 
     }
