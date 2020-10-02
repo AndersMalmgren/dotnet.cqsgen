@@ -31,8 +31,11 @@ namespace dotnet_cqsgen
                 .Where(t => (includeAbstract || !t.IsAbstract) && baseClasses.Any(bc => bc.IsAssignableFrom(t)))
                 .ToList();
 
+            var extraTypes = (extractAdditonalTypes?.Invoke(concreteTypes) ?? Enumerable.Empty<Type>())
+                .ToList();
+
             concreteTypes = concreteTypes
-                .Union(extractAdditonalTypes?.Invoke(concreteTypes) ?? Enumerable.Empty<Type>())
+                .Union(extraTypes)
                 .ToList();
 
             var containtedTypes = concreteTypes
@@ -42,10 +45,12 @@ namespace dotnet_cqsgen
 
             materializedTypes = containtedTypes
                 .Union(concreteTypes)
+                .Where(mt => !mt.IsEnum)
                 .ToList();
 
             enumTypes = materializedTypes
                 .SelectMany(c => c.GetProperties().Select(p => GetUnderlyingType(p.PropertyType)).Where(pt => pt.IsEnum))
+                .Union(concreteTypes.Where(mt => mt.IsEnum))
                 .Distinct()
                 .ToList();
 
