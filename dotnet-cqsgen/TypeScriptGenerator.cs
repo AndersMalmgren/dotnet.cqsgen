@@ -24,7 +24,8 @@ namespace dotnet_cqsgen
                 { typeof(long), "number" },
                 { typeof(byte), "number" },
                 { typeof(DateTime), "Date" },
-                { typeof(bool), "boolean" }
+                { typeof(bool), "boolean" },
+                { typeof(byte[]), "string" }
             };
         }
 
