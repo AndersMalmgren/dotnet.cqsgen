@@ -79,7 +79,7 @@ namespace dotnet_cqsgen
                     if(hasBaseContract || properties.Any())
                     { 
                         yield return $"        constructor({string.Join(", ", properties.OrderBy(p => p.IsNullable).Select(p => $"{p.CamelCased}{p.NullablePostfix}:{p.TypeName}"))}) {{";
-                        if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).Select(p => p.CamelCased))});";
+                        if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).OrderBy(p => p.IsNullable).Select(p => p.CamelCased))});";
                         foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"            this.{p.CamelCased}={p.CamelCased};";
                         yield return $"            this.constructor['type']='{contract.FullName}';";
                         yield return "        }";
