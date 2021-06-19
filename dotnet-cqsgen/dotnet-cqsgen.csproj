@@ -6,12 +6,14 @@
     <RootNamespace>dotnet_cqsgen</RootNamespace>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageType>DotnetCliTool</PackageType>
-    <Version>1.0.28</Version>
+    <Version>1.0.29</Version>
     <PackageId>dotnet.cqsgen</PackageId>
     <Authors>Anders Malmgren</Authors>
     <Company>MDA Digital</Company>
     <RepositoryUrl>https://github.com/AndersMalmgren/dotnet.cqsgen</RepositoryUrl>
     <PackageLicenseUrl>https://opensource.org/licenses/MIT</PackageLicenseUrl>
+    <AssemblyVersion>1.0.29.0</AssemblyVersion>
+    <FileVersion>1.0.29.0</FileVersion>
   </PropertyGroup>
 
 </Project>
