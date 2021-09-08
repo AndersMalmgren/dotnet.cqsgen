@@ -10,7 +10,7 @@ namespace dotnet_cqsgen
     {
         private readonly Dictionary<Type, string> typeMapping;
 
-        public TypeScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties) : base(assembly, baseClasses, ignoreBaseClassProperties)
+        public TypeScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
         {
             InitTypes(true, types => types.Where(t => t.BaseType.IsGenericType && t.BaseType.GenericTypeArguments.Length > 0).SelectMany(t => t.BaseType.GenericTypeArguments.Select(ExtractElementFromArray).Where(arg => arg.Assembly == assembly)));
 
@@ -36,6 +36,8 @@ namespace dotnet_cqsgen
 
         private IEnumerable<string> GenerateInternal()
         {
+            yield return "//" + GetHeader();
+
             var namespaces = materializedTypes
                 .GroupBy(c => c.Namespace)
                 .OrderBy(ns => !ns.Any(c => baseClasses.Any(bc => bc == c)));

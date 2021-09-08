@@ -15,13 +15,15 @@ namespace dotnet_cqsgen
         protected IEnumerable<Type> enumTypes;
 
         protected readonly bool ignoreBaseClassProperties;
+        private readonly bool noAssemblyInfo;
 
-        public ScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties)
+        public ScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
         {
             this.assembly = assembly;
             this.baseClasses = baseClasses;
 
             this.ignoreBaseClassProperties = ignoreBaseClassProperties;
+            this.noAssemblyInfo = noAssemblyInfo;
         }
 
         protected void InitTypes(bool includeAbstract = false, Func<IEnumerable<Type>, IEnumerable<Type>> extractAdditonalTypes = null)
@@ -96,6 +98,12 @@ namespace dotnet_cqsgen
         protected string CamelCased(string pascalCased)
         {
             return pascalCased.Substring(0, 1).ToLower() + pascalCased.Substring(1);
+        }
+
+        protected string GetHeader()
+        {
+            var info = noAssemblyInfo ? "a tool" : assembly.FullName;
+            return $"Generated from {info}, do not modify https://github.com/AndersMalmgren/dotnet.cqsgen";
         }
 
         public abstract string Generate();

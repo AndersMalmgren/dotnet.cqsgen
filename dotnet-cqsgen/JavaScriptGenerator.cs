@@ -8,7 +8,7 @@ namespace dotnet_cqsgen
 {
     public class JavaScriptGenerator : ScriptGenerator
     {
-        public JavaScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties) : base(assembly, baseClasses, ignoreBaseClassProperties)
+        public JavaScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
         {
             InitTypes();
         }
@@ -16,7 +16,8 @@ namespace dotnet_cqsgen
         public override string Generate()
         {
 
-            return $@"(function() {{
+            return $@"//{GetHeader()}
+(function() {{
 {string.Join(Environment.NewLine, BuildNamespace(materializedTypes.Union(enumTypes)).Select(ns => $"   {ns}"))}
 
 {string.Join(Environment.NewLine, BuildEnums(enumTypes))}
