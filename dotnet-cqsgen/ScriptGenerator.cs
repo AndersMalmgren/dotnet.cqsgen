@@ -43,6 +43,7 @@ namespace dotnet_cqsgen
             var containtedTypes = concreteTypes
                 .SelectMany(FindProperties)
                 .Distinct()
+                .Select(t => t.IsGenericType ? t.GetGenericTypeDefinition() : t)
                 .ToList();
 
             materializedTypes = containtedTypes

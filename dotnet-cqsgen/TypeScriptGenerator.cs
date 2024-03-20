@@ -59,7 +59,7 @@ namespace dotnet_cqsgen
                 foreach (var grp in ns.GroupBy(contract => StripGenericsFromName(contract.Name)))
                 {
                     var grpList = grp.ToList();
-                    var contract = grpList.Count == 1 ? grpList[0] : grpList.FirstOrDefault(c => c.IsGenericType);
+                    var contract = grpList.Count == 1 ? grpList[0] : grpList.First(c => c.IsGenericType);
                     var hasDefaultGenericArguments = grpList.Count > 1;
 
                     var contractName = grp.Key;
@@ -68,22 +68,22 @@ namespace dotnet_cqsgen
                     var hasBaseContract = baseContract != null;
                     
                     var properties = GetProperties(contract)
-                        .Select(p => new { IsBaseProperty = p.DeclaringType != contract && grpList.All(bc => p.DeclaringType != bc), CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key), IsNullable = Nullable.GetUnderlyingType(p.PropertyType) != null, NullablePostfix = Nullable.GetUnderlyingType(p.PropertyType) != null ? "?":"" })
+                        .Select(p => new { p.PropertyType, IsBaseProperty = p.DeclaringType != contract && grpList.All(bc => p.DeclaringType != bc), CamelCased = CamelCased(p.Name), TypeName = GetPropertyTypeName(p.PropertyType, ns.Key), IsNullable = Nullable.GetUnderlyingType(p.PropertyType) != null, NullablePostfix = Nullable.GetUnderlyingType(p.PropertyType) != null ? "?":"" })
                         .OrderBy(p => !p.IsBaseProperty)
                         .ToList();
 
-                    var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key))}{GetGenerics(baseContract, ns.Key)}" : string.Empty;
+                    var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key))}" : string.Empty;
 
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}{p.NullablePostfix}: {p.TypeName};";
-                    foreach (var p in (contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()) yield return $"        private _dummy{p.Name}:{p.Name};";
+                    foreach (var p in ((contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()).Where(gt => properties.All(p => p.PropertyType != gt))) yield return $"        private _dummy{p.Name}:{p.Name};";
 
                     if(hasBaseContract || properties.Any())
                     { 
                         yield return $"        constructor({string.Join(", ", properties.OrderBy(p => p.IsNullable).Select(p => $"{p.CamelCased}{p.NullablePostfix}:{p.TypeName}"))}) {{";
                         if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).OrderBy(p => p.IsNullable).Select(p => p.CamelCased))});";
                         foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"            this.{p.CamelCased}={p.CamelCased};";
-                        yield return $"            (this.constructor as any).type='{contract.FullName}';";
+                        yield return $"            (this.constructor as any).type='{StripGenericsFromName(contract.FullName)}';";
                         yield return "        }";
                     }
                     yield return "    }";
@@ -113,6 +113,13 @@ namespace dotnet_cqsgen
 
         private string GetPropertyTypeName(Type type, string ns)
         {
+            string GetName()
+            {
+                if (!type.IsGenericType) return type.Name;
+
+                return $"{StripGenericsFromName(type.Name)}<{string.Join(", ", type.GenericTypeArguments.Select(gta => GetPropertyTypeName(gta, ns)))}>";
+            }
+
             if (typeMapping.ContainsKey(type)) return typeMapping[type];
             if (typeof(IEnumerable).IsAssignableFrom(type))
             {
@@ -135,19 +142,19 @@ namespace dotnet_cqsgen
 
             if (type.Assembly == assembly)
             {
-                if (ns == type.Namespace || type.Namespace == null) return type.Name;
+                if (ns == type.Namespace || type.Namespace == null) return GetName();
 
                 var closure = ns.Split(".");
                 var dependency = type.Namespace.Split(".");
 
                 var start = GetNamespaceStart(closure, dependency);
-                if (start == dependency.Length) return type.Name;
+                if (start == dependency.Length) return GetName();
 
                 var stripped = string.Join(".", dependency.Skip(start));
-                return $"{stripped}.{type.Name}";
+                return $"{stripped}.{GetName()}";
             }
 
-            return type.Name;
+            return GetName();
         }
 
         private int GetNamespaceStart(string[] closure, string[] dependency)
