@@ -28,9 +28,15 @@ namespace dotnet_cqsgen
 
         protected void InitTypes(bool includeAbstract = false, Func<IEnumerable<Type>, IEnumerable<Type>> extractAdditonalTypes = null)
         {
+            var predicate = new Func<Type, Type, bool>((t, t2) =>
+            {
+                if (t2.IsAssignableFrom(t)) return true;
+                return t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == t2);
+            });
+
             var allTypes = assembly.GetTypes();
             var concreteTypes = allTypes
-                .Where(t => (includeAbstract || !t.IsAbstract) && baseClasses.Any(bc => bc.IsAssignableFrom(t)))
+                .Where(t => (includeAbstract || !t.IsAbstract) && baseClasses.Any(bc => predicate(t, bc)))
                 .ToList();
 
             var extraTypes = (extractAdditonalTypes?.Invoke(concreteTypes) ?? Enumerable.Empty<Type>())

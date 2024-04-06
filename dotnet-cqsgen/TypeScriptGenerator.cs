@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
 
@@ -12,7 +13,10 @@ namespace dotnet_cqsgen
 
         public TypeScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
         {
-            InitTypes(true, types => types.Where(t => t.BaseType.IsGenericType && t.BaseType.GenericTypeArguments.Length > 0).SelectMany(t => t.BaseType.GenericTypeArguments.Select(ExtractElementFromArray).Where(arg => arg.Assembly == assembly)));
+            InitTypes(true, types => types
+                .SelectMany(t => (t.BaseType?.GenericTypeArguments ?? Enumerable.Empty<Type>()).Union(t.GetInterfaces().Where(i => i.IsGenericType).SelectMany(i => i.GetGenericArguments())))
+                .Select(ExtractElementFromArray)
+                .Where(t => t.Assembly == assembly));
 
             typeMapping = new Dictionary<Type, string>
             {
@@ -38,7 +42,7 @@ namespace dotnet_cqsgen
         {
             yield return "//" + GetHeader();
 
-            var namespaces = materializedTypes
+            var namespaces = materializedTypes.Union(enumTypes)
                 .GroupBy(c => c.Namespace)
                 .OrderBy(ns => !ns.Any(c => baseClasses.Any(bc => bc == c)));
 
@@ -46,7 +50,7 @@ namespace dotnet_cqsgen
             {
                 yield return $"export namespace {ns.Key} {{";
 
-                foreach (var @enum in enumTypes.Where(e => e.Namespace == ns.Key))
+                foreach (var @enum in ns.Where(contract => contract.IsEnum))
                 {
                     var values = Enum.GetValues(@enum).Cast<int>();
 
@@ -56,7 +60,7 @@ namespace dotnet_cqsgen
                     yield return "    }";
                 }
 
-                foreach (var grp in ns.GroupBy(contract => StripGenericsFromName(contract.Name)))
+                foreach (var grp in ns.Where(contract => !contract.IsEnum).OrderBy(contract => !baseClasses.Contains(contract)).GroupBy(contract => StripGenericsFromName(contract.Name)))
                 {
                     var grpList = grp.ToList();
                     var contract = grpList.Count == 1 ? grpList[0] : grpList.First(c => c.IsGenericType);
@@ -64,7 +68,8 @@ namespace dotnet_cqsgen
 
                     var contractName = grp.Key;
 
-                    var baseContract = contract.BaseType?.Assembly == assembly && (!hasDefaultGenericArguments || grpList.All(bc => bc != contract.BaseType)) ? contract.BaseType : null;
+                    var baseType = GetBaseType(contract);
+                    var baseContract = baseType?.Assembly == assembly && (!hasDefaultGenericArguments || grpList.All(bc => bc != baseType)) ? baseType : null;
                     var hasBaseContract = baseContract != null;
                     
                     var properties = GetProperties(contract)
@@ -93,6 +98,14 @@ namespace dotnet_cqsgen
             }
         }
 
+        private Type GetBaseType(Type contract)
+        {
+            if (contract.BaseType != typeof(object)) return contract.BaseType;
+            var @interface = contract.GetInterfaces().Select(i => (i.IsGenericType ? i.GetGenericTypeDefinition() : i, i)).SingleOrDefault(i => baseClasses.Contains(i.Item1));
+
+            return @interface.i;
+        }
+
         private string GetGenerics(Type contract, string ns, bool hasDefaultGenericArguments = false)
         {
             if (!contract.IsGenericType) return string.Empty;
@@ -117,7 +130,9 @@ namespace dotnet_cqsgen
             {
                 if (!type.IsGenericType) return type.Name;
 
-                return $"{StripGenericsFromName(type.Name)}<{string.Join(", ", type.GenericTypeArguments.Select(gta => GetPropertyTypeName(gta, ns)))}>";
+                var info = (TypeInfo)type;
+
+                return $"{StripGenericsFromName(type.Name)}<{string.Join(", ", (info.GenericTypeParameters.Length > 0 ? info.GenericTypeParameters : info.GenericTypeArguments).Select(gta => GetPropertyTypeName(gta, ns)))}>";
             }
 
             if (typeMapping.ContainsKey(type)) return typeMapping[type];

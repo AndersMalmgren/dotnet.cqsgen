@@ -19,7 +19,7 @@ namespace dotnet_cqsgen
             var outputPath = args[1];
 
             var assembly = Assembly.LoadFile(assemblyPath);
-            var baseClasses = args[2].Split(";").Select(tn => assembly.GetType(tn)).ToList();
+            var baseClasses = args[2].Split(";").Select(tn => GetBaseType(assembly, tn)).ToList();
 
             var ext = Path.GetExtension(outputPath);
 
@@ -28,6 +28,15 @@ namespace dotnet_cqsgen
             
             Console.WriteLine($"Parsing complete, saving: {outputPath}");
             File.WriteAllText(outputPath, result);
+        }
+
+        private static Type GetBaseType(Assembly assembly, string typeName)
+        {
+            var type = assembly.GetType(typeName);
+            if (type != null) return type;
+
+            var s = assembly.GetTypes().Single(t => t.FullName?.StartsWith(typeName, StringComparison.Ordinal) == true);
+            return s;
         }
 
         private static ScriptGenerator GetGenerator(string ext, Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
