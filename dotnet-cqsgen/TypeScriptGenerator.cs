@@ -78,8 +78,10 @@ namespace dotnet_cqsgen
                         .ToList();
 
                     var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key))}" : string.Empty;
+                    var typeOverride = hasBaseContract ? "override " : string.Empty;
 
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
+                    yield return $"        static {typeOverride}type='{StripGenericsFromName(contract.FullName)}';";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}{p.NullablePostfix}: {p.TypeName};";
                     foreach (var p in ((contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()).Where(gt => properties.All(p => p.PropertyType != gt))) yield return $"        private _dummy{p.Name}:{p.Name};";
 
@@ -88,7 +90,6 @@ namespace dotnet_cqsgen
                         yield return $"        constructor({string.Join(", ", properties.OrderBy(p => p.IsNullable).Select(p => $"{p.CamelCased}{p.NullablePostfix}:{p.TypeName}"))}) {{";
                         if (hasBaseContract) yield return $"            super({string.Join(", ", properties.Where(p => p.IsBaseProperty).OrderBy(p => p.IsNullable).Select(p => p.CamelCased))});";
                         foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"            this.{p.CamelCased}={p.CamelCased};";
-                        yield return $"            (this.constructor as any).type='{StripGenericsFromName(contract.FullName)}';";
                         yield return "        }";
                     }
                     yield return "    }";
