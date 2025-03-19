@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -16,37 +15,56 @@ namespace dotnet_cqsgen
 
             Console.WriteLine("Starting parsing cqs contracts!");
             var assemblyPath = $"{Directory.GetCurrentDirectory()}\\{args[0]}";
+            var assemblyFolder = Path.GetDirectoryName(assemblyPath) ?? throw new NullReferenceException();
             var outputPath = args[1];
 
             var assembly = Assembly.LoadFile(assemblyPath);
-            var baseClasses = args[2].Split(";").Select(tn => GetBaseType(assembly, tn)).ToList();
+
+            var loadedAssemblies = new List<Assembly>([assembly]);
+            AppDomain.CurrentDomain.AssemblyResolve += (_, e) =>
+            {
+                var asm = Assembly.LoadFile($"{assemblyFolder}\\{new AssemblyName(e.Name).Name}.dll");
+                loadedAssemblies.Add(asm);
+                return asm;
+            };
+
+            var baseClasses = args[2].Split(";").Select(tn => GetBaseType(assembly, loadedAssemblies, tn)).ToList();
 
             var ext = Path.GetExtension(outputPath);
 
-            var parser = GetGenerator(ext, assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
+            var parser = GetGenerator(ext, assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
             var result = parser.Generate();
             
             Console.WriteLine($"Parsing complete, saving: {outputPath}");
             File.WriteAllText(outputPath, result);
         }
 
-        private static Type GetBaseType(Assembly assembly, string typeName)
+        private static Type GetBaseType(Assembly assembly, IEnumerable<Assembly> loadedAssemblies, string typeName)
         {
-            var type = assembly.GetType(typeName);
-            if (type != null) return type;
+            _ = assembly.GetTypes();
+            loadedAssemblies = loadedAssemblies.OrderByDescending(asm => asm == assembly);
+            var type = loadedAssemblies.Select(asm =>
+            {
+                var type = asm.GetType(typeName);
+                if (type is { IsInterface: false }) return type;
 
-            var s = assembly.GetTypes().Single(t => t.FullName?.StartsWith(typeName, StringComparison.Ordinal) == true);
-            return s;
+                var allWithName = asm.GetTypes().Where(t => t.FullName?.StartsWith(typeName, StringComparison.Ordinal) == true)
+                    .ToList();
+
+                return allWithName.SingleOrDefault(t => !allWithName.Any(other => other.GetInterfaces().Contains(t)));
+
+            }).First(t => t != null);
+            return type;
         }
 
-        private static ScriptGenerator GetGenerator(string ext, Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
+        private static ScriptGenerator GetGenerator(string ext, Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
         {
             switch (ext.ToLower())
             {
                 case ".js":
-                    return new JavaScriptGenerator(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
+                    return new JavaScriptGenerator(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
                 case ".ts":
-                    return new TypeScriptGenerator(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
+                    return new TypeScriptGenerator(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
                 default:
                     throw new ArgumentException($"Extension {ext} not supported");
             }

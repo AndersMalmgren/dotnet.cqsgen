@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
 
@@ -10,8 +9,9 @@ namespace dotnet_cqsgen
     public class TypeScriptGenerator : ScriptGenerator
     {
         private readonly Dictionary<Type, string> typeMapping;
+        private readonly List<IGrouping<string, Type>> namespaces;
 
-        public TypeScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
+        public TypeScriptGenerator(Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
         {
             InitTypes(true, types => types
                 .SelectMany(t => (t.BaseType?.GenericTypeArguments ?? Enumerable.Empty<Type>()).Union(t.GetInterfaces().Where(i => i.IsGenericType).SelectMany(i => i.GetGenericArguments())))
@@ -31,6 +31,11 @@ namespace dotnet_cqsgen
                 { typeof(bool), "boolean" },
                 { typeof(byte[]), "string" }
             };
+
+            namespaces = MaterializedTypes.Union(EnumTypes)
+                .GroupBy(c => c.Namespace)
+                .OrderBy(ns => !ns.Any(c => BaseClasses.Any(bc => bc == c)))
+                .ToList();
         }
 
         public override string Generate()
@@ -42,9 +47,6 @@ namespace dotnet_cqsgen
         {
             yield return "//" + GetHeader();
 
-            var namespaces = materializedTypes.Union(enumTypes)
-                .GroupBy(c => c.Namespace)
-                .OrderBy(ns => !ns.Any(c => baseClasses.Any(bc => bc == c)));
 
             foreach (var ns in namespaces)
             {
@@ -60,7 +62,7 @@ namespace dotnet_cqsgen
                     yield return "    }";
                 }
 
-                foreach (var grp in ns.Where(contract => !contract.IsEnum).OrderBy(contract => !baseClasses.Contains(contract)).GroupBy(contract => StripGenericsFromName(contract.Name)))
+                foreach (var grp in ns.Where(contract => !contract.IsEnum).OrderBy(contract => !BaseClasses.Contains(contract)).GroupBy(contract => StripGenericsFromName(contract.Name)))
                 {
                     var grpList = grp.ToList();
                     var contract = grpList.Count == 1 ? grpList[0] : grpList.First(c => c.IsGenericType);
@@ -69,7 +71,7 @@ namespace dotnet_cqsgen
                     var contractName = grp.Key;
 
                     var baseType = GetBaseType(contract);
-                    var baseContract = baseType?.Assembly == assembly && (!hasDefaultGenericArguments || grpList.All(bc => bc != baseType)) ? baseType : null;
+                    var baseContract = LoadedAssemblies.Contains(baseType?.Assembly)  && (!hasDefaultGenericArguments || grpList.All(bc => bc != baseType)) ? baseType : null;
                     var hasBaseContract = baseContract != null;
                     
                     var properties = GetProperties(contract)
@@ -77,7 +79,7 @@ namespace dotnet_cqsgen
                         .OrderBy(p => !p.IsBaseProperty)
                         .ToList();
 
-                    var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key))}" : string.Empty;
+                    var extends = hasBaseContract ? $" extends {StripGenericsFromName(GetPropertyTypeName(baseContract, ns.Key, true))}" : string.Empty;
                     var typeOverride = hasBaseContract ? "override " : string.Empty;
 
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
@@ -102,7 +104,8 @@ namespace dotnet_cqsgen
         private Type GetBaseType(Type contract)
         {
             if (contract.BaseType != typeof(object)) return contract.BaseType;
-            var @interface = contract.GetInterfaces().Select(i => (i.IsGenericType ? i.GetGenericTypeDefinition() : i, i)).SingleOrDefault(i => baseClasses.Contains(i.Item1));
+            var directlyImplementedInterfaces = contract.GetInterfaces().Where(i => !contract.GetInterfaces().Any(baseInterface => baseInterface.GetInterfaces().Contains(i)));
+            var @interface = directlyImplementedInterfaces.Select(i => (i.IsGenericType ? i.GetGenericTypeDefinition() : i, i)).SingleOrDefault(i => BaseClasses.Contains(i.Item1));
 
             return @interface.i;
         }
@@ -125,7 +128,7 @@ namespace dotnet_cqsgen
             return name.Substring(0, index);
         }
 
-        private string GetPropertyTypeName(Type type, string ns)
+        private string GetPropertyTypeName(Type type, string ns, bool extending = false)
         {
             string GetName()
             {
@@ -156,21 +159,44 @@ namespace dotnet_cqsgen
                 return GetPropertyTypeName(nullableType, ns);
             }
 
-            if (type.Assembly == assembly)
+            if (LoadedAssemblies.Contains(type.Assembly))
             {
                 if (ns == type.Namespace || type.Namespace == null) return GetName();
-
-                var closure = ns.Split(".");
-                var dependency = type.Namespace.Split(".");
-
-                var start = GetNamespaceStart(closure, dependency);
-                if (start == dependency.Length) return GetName();
-
-                var stripped = string.Join(".", dependency.Skip(start));
+                var stripped = GetSharedNameSpace(ns, type.Namespace, namespaces, extending);
+                if(string.IsNullOrEmpty(stripped)) return GetName();
                 return $"{stripped}.{GetName()}";
             }
 
             return GetName();
+        }
+
+        private string GetSharedNameSpace(string ns, string dependencyNs, IEnumerable<IGrouping<string, Type>> allNamespaces, bool conflictCheck)
+        {
+            var closure = ns.Split(".");
+            var dependency = dependencyNs.Split(".");
+
+            var start = GetNamespaceStart(closure, dependency);
+            if (start == dependency.Length) return string.Empty;
+
+            var stripped = string.Join(".", dependency.Skip(start));
+            if (!conflictCheck) return stripped; 
+
+            foreach (var existingNs in allNamespaces)
+            {
+                if(dependencyNs == existingNs.Key) continue;
+                
+                var existing = existingNs.Key.Split(".");
+                var sharedEnd = GetNamespaceStart(closure, existing);
+
+                if (sharedEnd >= existing.Length) continue;
+
+                var existingËndShared = existing[sharedEnd];
+                var depStart = dependency[start];
+
+                if(depStart == existingËndShared) return dependencyNs;
+            }
+
+            return stripped;
         }
 
         private int GetNamespaceStart(string[] closure, string[] dependency)

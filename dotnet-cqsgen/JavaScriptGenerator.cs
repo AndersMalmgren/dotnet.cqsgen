@@ -8,7 +8,7 @@ namespace dotnet_cqsgen
 {
     public class JavaScriptGenerator : ScriptGenerator
     {
-        public JavaScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
+        public JavaScriptGenerator(Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
         {
             InitTypes();
         }
@@ -18,10 +18,10 @@ namespace dotnet_cqsgen
 
             return $@"//{GetHeader()}
 (function() {{
-{string.Join(Environment.NewLine, BuildNamespace(materializedTypes.Union(enumTypes)).Select(ns => $"   {ns}"))}
+{string.Join(Environment.NewLine, BuildNamespace(MaterializedTypes.Union(EnumTypes)).Select(ns => $"   {ns}"))}
 
-{string.Join(Environment.NewLine, BuildEnums(enumTypes))}
-{string.Join(Environment.NewLine, BuildContracts(materializedTypes))}
+{string.Join(Environment.NewLine, BuildEnums(EnumTypes))}
+{string.Join(Environment.NewLine, BuildContracts(MaterializedTypes))}
 }})();
 ";
         }

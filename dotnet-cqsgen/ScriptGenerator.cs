@@ -8,21 +8,23 @@ namespace dotnet_cqsgen
 {
     public abstract class ScriptGenerator 
     {
-        protected readonly Assembly assembly;
-        protected readonly List<Type> baseClasses;
+        protected readonly Assembly Assembly;
+        protected readonly IEnumerable<Assembly> LoadedAssemblies;
+        protected readonly List<Type> BaseClasses;
 
-        protected IEnumerable<Type> materializedTypes;
-        protected IEnumerable<Type> enumTypes;
+        protected IEnumerable<Type> MaterializedTypes;
+        protected IEnumerable<Type> EnumTypes;
 
-        protected readonly bool ignoreBaseClassProperties;
+        protected readonly bool IgnoreBaseClassProperties;
         private readonly bool noAssemblyInfo;
 
-        public ScriptGenerator(Assembly assembly, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
+        public ScriptGenerator(Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
         {
-            this.assembly = assembly;
-            this.baseClasses = baseClasses;
+            Assembly = assembly;
+            LoadedAssemblies = loadedAssemblies;
+            BaseClasses = baseClasses;
 
-            this.ignoreBaseClassProperties = ignoreBaseClassProperties;
+            IgnoreBaseClassProperties = ignoreBaseClassProperties;
             this.noAssemblyInfo = noAssemblyInfo;
         }
 
@@ -34,9 +36,9 @@ namespace dotnet_cqsgen
                 return t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == t2);
             });
 
-            var allTypes = assembly.GetTypes();
+            var allTypes = LoadedAssemblies.SelectMany(asm => asm.GetTypes());
             var concreteTypes = allTypes
-                .Where(t => (includeAbstract || !t.IsAbstract) && baseClasses.Any(bc => predicate(t, bc)))
+                .Where(t => (includeAbstract || !t.IsAbstract) && BaseClasses.Any(bc => predicate(t, bc)))
                 .ToList();
 
             var extraTypes = (extractAdditonalTypes?.Invoke(concreteTypes) ?? Enumerable.Empty<Type>())
@@ -46,18 +48,18 @@ namespace dotnet_cqsgen
                 .Union(extraTypes)
                 .ToList();
 
-            var containtedTypes = concreteTypes
+            var contained = concreteTypes
                 .SelectMany(FindProperties)
                 .Distinct()
                 .Select(t => t.IsGenericType ? t.GetGenericTypeDefinition() : t)
                 .ToList();
 
-            materializedTypes = containtedTypes
+            MaterializedTypes = contained
                 .Union(concreteTypes)
                 .Where(mt => !mt.IsEnum)
                 .ToList();
 
-            enumTypes = materializedTypes
+            EnumTypes = MaterializedTypes
                 .SelectMany(c => c.GetProperties().Select(p => GetUnderlyingType(p.PropertyType)).Where(pt => pt.IsEnum))
                 .Union(concreteTypes.Where(mt => mt.IsEnum))
                 .Distinct()
@@ -67,7 +69,7 @@ namespace dotnet_cqsgen
 
         private IEnumerable<Type> FindProperties(Type t)
         {
-            var types = t.GetProperties().Select(p => ExtractElementFromArray(p.PropertyType)).Where(pt => !pt.IsValueType && pt.Assembly == assembly).ToList();
+            var types = t.GetProperties().Select(p => ExtractElementFromArray(p.PropertyType)).Where(pt => !pt.IsValueType && pt.Assembly == Assembly).ToList();
             foreach (var type in types)
             {
                 yield return type;
@@ -81,7 +83,7 @@ namespace dotnet_cqsgen
             var nullableType = Nullable.GetUnderlyingType(type);
             if (nullableType != null) return nullableType;
 
-            return type;
+            return ExtractElementFromArray(type);
         }
 
         protected Type ExtractElementFromArray(Type propType)
@@ -90,6 +92,7 @@ namespace dotnet_cqsgen
             {
                 var args = propType.GetGenericArguments();
                 if (args.Length > 0) return args[0];
+                if (propType.IsArray) return propType.GetElementType();
             }
 
             return propType;
@@ -99,7 +102,7 @@ namespace dotnet_cqsgen
         {
             return contract
                 .GetProperties()
-                .Where(p => !ignoreBaseClassProperties || baseClasses.All(bc => bc != p.DeclaringType));
+                .Where(p => !IgnoreBaseClassProperties || BaseClasses.All(bc => bc != p.DeclaringType));
         }
 
         protected string CamelCased(string pascalCased)
@@ -109,7 +112,7 @@ namespace dotnet_cqsgen
 
         protected string GetHeader()
         {
-            var info = noAssemblyInfo ? "a tool" : assembly.FullName;
+            var info = noAssemblyInfo ? "a tool" : Assembly.FullName;
             return $"Generated from {info}, do not modify https://github.com/AndersMalmgren/dotnet.cqsgen";
         }
 
