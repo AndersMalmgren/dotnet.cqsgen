@@ -12,6 +12,7 @@ namespace dotnet_cqsgen
         {
             var ignoreBaseClassProperties = args.Any(a => a.ToLower() == "ignore-properties-on-base");
             var noAssemblyInfo = args.Any(a => a.ToLower() == "no-assembly-info");
+            var alwaysConflictCheckNameSpace = args.Any(a => a.ToLower() == "namespace-conflict-check");
 
             Console.WriteLine("Starting parsing cqs contracts!");
             var assemblyPath = $"{Directory.GetCurrentDirectory()}\\{args[0]}";
@@ -32,7 +33,7 @@ namespace dotnet_cqsgen
 
             var ext = Path.GetExtension(outputPath);
 
-            var parser = GetGenerator(ext, assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
+            var parser = GetGenerator(ext, assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo, alwaysConflictCheckNameSpace);
             var result = parser.Generate();
             
             Console.WriteLine($"Parsing complete, saving: {outputPath}");
@@ -57,14 +58,14 @@ namespace dotnet_cqsgen
             return type;
         }
 
-        private static ScriptGenerator GetGenerator(string ext, Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo)
+        private static ScriptGenerator GetGenerator(string ext, Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo, bool alwaysConflictCheckNameSpace)
         {
             switch (ext.ToLower())
             {
                 case ".js":
                     return new JavaScriptGenerator(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
                 case ".ts":
-                    return new TypeScriptGenerator(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo);
+                    return new TypeScriptGenerator(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo, alwaysConflictCheckNameSpace);
                 default:
                     throw new ArgumentException($"Extension {ext} not supported");
             }

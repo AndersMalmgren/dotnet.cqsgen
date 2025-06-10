@@ -10,9 +10,11 @@ namespace dotnet_cqsgen
     {
         private readonly Dictionary<Type, string> typeMapping;
         private readonly List<IGrouping<string, Type>> namespaces;
+        private readonly bool alwaysConflictCheckNameSpace;
 
-        public TypeScriptGenerator(Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo) : base(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
+        public TypeScriptGenerator(Assembly assembly, IReadOnlyCollection<Assembly> loadedAssemblies, List<Type> baseClasses, bool ignoreBaseClassProperties, bool noAssemblyInfo, bool alwaysConflictCheckNameSpace) : base(assembly, loadedAssemblies, baseClasses, ignoreBaseClassProperties, noAssemblyInfo)
         {
+            this.alwaysConflictCheckNameSpace = alwaysConflictCheckNameSpace;
             InitTypes(true, types => types
                 .SelectMany(t => (t.BaseType?.GenericTypeArguments ?? Enumerable.Empty<Type>()).Union(t.GetInterfaces().Where(i => i.IsGenericType).SelectMany(i => i.GetGenericArguments())))
                 .Select(ExtractElementFromArray)
@@ -162,7 +164,7 @@ namespace dotnet_cqsgen
             if (LoadedAssemblies.Contains(type.Assembly))
             {
                 if (ns == type.Namespace || type.Namespace == null) return GetName();
-                var stripped = GetSharedNameSpace(ns, type.Namespace, namespaces, extending);
+                var stripped = GetSharedNameSpace(ns, type.Namespace, namespaces, extending || alwaysConflictCheckNameSpace);
                 if(string.IsNullOrEmpty(stripped)) return GetName();
                 return $"{stripped}.{GetName()}";
             }
