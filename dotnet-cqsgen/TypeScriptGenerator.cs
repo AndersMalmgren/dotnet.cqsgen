@@ -31,7 +31,8 @@ namespace dotnet_cqsgen
                 { typeof(byte), "number" },
                 { typeof(DateTime), "Date" },
                 { typeof(bool), "boolean" },
-                { typeof(byte[]), "string" }
+                { typeof(byte[]), "string" },
+                { typeof(object), "object" }
             };
 
             namespaces = MaterializedTypes.Union(EnumTypes)
