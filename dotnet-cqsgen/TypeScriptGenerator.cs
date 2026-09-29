@@ -88,7 +88,7 @@ namespace dotnet_cqsgen
                     yield return $"    export class {contractName}{GetGenerics(contract, ns.Key, hasDefaultGenericArguments)}{extends} {{";
                     yield return $"        static {typeOverride}type='{StripGenericsFromName(contract.FullName)}';";
                     foreach (var p in properties.Where(p => !p.IsBaseProperty)) yield return $"        {CamelCased(p.CamelCased)}{p.NullablePostfix}: {p.TypeName};";
-                    foreach (var p in ((contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()).Where(gt => properties.All(p => p.PropertyType != gt))) yield return $"        private _dummy{p.Name}:{p.Name};";
+                    foreach (var p in ((contract as TypeInfo)?.GenericTypeParameters ?? Enumerable.Empty<Type>()).Where(gt => !properties.Any(prop => TypeUsesGenericParameter(prop.PropertyType, gt)))) yield return $"        private _dummy{p.Name}?:{p.Name};";
 
                     if(hasBaseContract || properties.Any())
                     { 
@@ -102,6 +102,15 @@ namespace dotnet_cqsgen
     
                 yield return "}";
             }
+        }
+
+        private bool TypeUsesGenericParameter(Type type, Type genericParam)
+        {
+            if (type == genericParam) return true;
+            if (type.IsGenericParameter && type.Name == genericParam.Name) return true;
+            if (type.HasElementType && TypeUsesGenericParameter(type.GetElementType(), genericParam)) return true;
+            if (type.IsGenericType && type.GetGenericArguments().Any(arg => TypeUsesGenericParameter(arg, genericParam))) return true;
+            return false;
         }
 
         private Type GetBaseType(Type contract)
@@ -133,6 +142,8 @@ namespace dotnet_cqsgen
 
         private string GetPropertyTypeName(Type type, string ns, bool extending = false)
         {
+            if (type.IsGenericParameter) return type.Name;
+
             string GetName()
             {
                 if (!type.IsGenericType) return type.Name;
@@ -140,6 +151,12 @@ namespace dotnet_cqsgen
                 var info = (TypeInfo)type;
 
                 return $"{StripGenericsFromName(type.Name)}<{string.Join(", ", (info.GenericTypeParameters.Length > 0 ? info.GenericTypeParameters : info.GenericTypeArguments).Select(gta => GetPropertyTypeName(gta, ns)))}>";
+            }
+
+            if (IsDictionary(type, out var keyType, out var valueType))
+            {
+                if (keyType == typeof(string) && valueType == typeof(object)) return "object";
+                return $"Record<{GetPropertyTypeName(keyType, ns)}, {GetPropertyTypeName(valueType, ns)}>";
             }
 
             if (typeMapping.ContainsKey(type)) return typeMapping[type];
@@ -171,6 +188,35 @@ namespace dotnet_cqsgen
             }
 
             return GetName();
+        }
+
+        private bool IsDictionary(Type type, out Type keyType, out Type valueType)
+        {
+            keyType = null;
+            valueType = null;
+
+            if (type.IsGenericType)
+            {
+                var gtd = type.GetGenericTypeDefinition();
+                if (gtd == typeof(Dictionary<,>) || gtd == typeof(IDictionary<,>) || gtd == typeof(IReadOnlyDictionary<,>))
+                {
+                    var args = type.GetGenericArguments();
+                    keyType = args[0];
+                    valueType = args[1];
+                    return true;
+                }
+            }
+
+            var dictInterface = type.GetInterfaces().FirstOrDefault(i => i.IsGenericType && (i.GetGenericTypeDefinition() == typeof(IDictionary<,>) || i.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
+            if (dictInterface != null)
+            {
+                var args = dictInterface.GetGenericArguments();
+                keyType = args[0];
+                valueType = args[1];
+                return true;
+            }
+
+            return false;
         }
 
         private string GetSharedNameSpace(string ns, string dependencyNs, IEnumerable<IGrouping<string, Type>> allNamespaces, bool conflictCheck)

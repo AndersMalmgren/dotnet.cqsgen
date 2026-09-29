@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Reflection;
 
@@ -46,12 +47,15 @@ namespace dotnet_cqsgen
 
             concreteTypes = concreteTypes
                 .Union(extraTypes)
+                .Select(t => t.IsGenericType ? t.GetGenericTypeDefinition() : t)
+                .Where(t => !t.IsGenericParameter)
                 .ToList();
 
             var contained = concreteTypes
                 .SelectMany(FindProperties)
                 .Distinct()
                 .Select(t => t.IsGenericType ? t.GetGenericTypeDefinition() : t)
+                .Where(t => !t.IsGenericParameter)
                 .ToList();
 
             MaterializedTypes = contained
@@ -60,30 +64,27 @@ namespace dotnet_cqsgen
                 .ToList();
 
             EnumTypes = MaterializedTypes
-                .SelectMany(c => c.GetProperties().Select(p => GetUnderlyingType(p.PropertyType)).Where(pt => pt.IsEnum))
+                .SelectMany(c => c.GetProperties().SelectMany(p => ExtractUnderlyingTypes(p.PropertyType)).Where(pt => pt.IsEnum))
                 .Union(concreteTypes.Where(mt => mt.IsEnum))
                 .Distinct()
                 .ToList();
-
         }
 
         private IEnumerable<Type> FindProperties(Type t)
         {
-            var types = t.GetProperties().Select(p => ExtractElementFromArray(p.PropertyType)).Where(pt => !pt.IsValueType && pt.Assembly == Assembly).ToList();
+            var types = t.GetProperties()
+                .Select(p => ExtractUnderlyingTypes(p.PropertyType))
+                .SelectMany(flatten => flatten)
+                .Where(pt => !pt.IsValueType && pt.Assembly == Assembly)
+                .Distinct()
+                .ToList();
+
             foreach (var type in types)
             {
                 yield return type;
                 foreach (var inner in FindProperties(type).ToList())
                     yield return inner;
             }
-        }
-
-        private Type GetUnderlyingType(Type type)
-        {
-            var nullableType = Nullable.GetUnderlyingType(type);
-            if (nullableType != null) return nullableType;
-
-            return ExtractElementFromArray(type);
         }
 
         protected Type ExtractElementFromArray(Type propType)
@@ -96,6 +97,34 @@ namespace dotnet_cqsgen
             }
 
             return propType;
+        }
+
+        protected IEnumerable<Type> ExtractUnderlyingTypes(Type propType)
+        {
+            var nullableType = Nullable.GetUnderlyingType(propType);
+            if (nullableType != null)
+            {
+                yield return nullableType;
+                yield break;
+            }
+
+            if (typeof(IEnumerable).IsAssignableFrom(propType))
+            {
+                var args = propType.GetGenericArguments();
+                if (args.Length > 0)
+                {
+                    foreach (var arg in args) yield return arg;
+                    yield break;
+                }
+
+                if (propType.IsArray)
+                {
+                    yield return propType.GetElementType();
+                    yield break;
+                }
+            }
+
+            yield return propType;
         }
 
         protected IEnumerable<PropertyInfo> GetProperties(Type contract)
